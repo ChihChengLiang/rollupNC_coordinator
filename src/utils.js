@@ -104,7 +104,8 @@ async function prepTxs(txs) {
     tx_token_types,
     signatures
   )
-  console.log("input generated", inputs)
+  return inputs
+  // console.log("input generated", inputs)
 }
 
 // async function prepTxs(txs) {

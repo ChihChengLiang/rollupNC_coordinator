@@ -45,6 +45,9 @@ export default class Transaction {
   async validate() {
     // validate the tx with all the checks snark will do
     // return true/false
+
+    // YT: this is already done in circuit.js createProof() which calls
+    // utils.js, prepTxs(), which calls snark_utils/update.js processTxArray()
   }
 
   async save() {

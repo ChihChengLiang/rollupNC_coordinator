@@ -1,8 +1,8 @@
 import utils from './utils';
-import config from '../config/config.js';
 import logger from './logger';
 import createProof from './circuit';
 import db from './db';
+import ProcessedTx from './processed_tx.js'
 
 const q = global.gConfig.tx_queue;
 const maxTxs = global.gConfig.txs_per_snark;
@@ -51,7 +51,35 @@ async function fetchTxs() {
     transaction["signature"] = utils.toSignature(tx.R1, tx.R2, tx.S)
     transactions.push(transaction)
   });
-  console.log("accounts here", await db.getAllAccounts())
-  createProof(transactions)
-  return;
+  // console.log("accounts here", await db.getAllAccounts())
+  const input = await createProof(transactions) //this validates all transactions
+  const txRoot = input['tx_root']
+  console.log('txRoot', txRoot)
+  const newStateRoot = input.intermediate_roots[input.intermediate_roots.length - 1]
+  var txHashes = new Array()
+  for (var i = 0; i < input.paths2tx_root.length; i++){
+    var index; // index of tx in tx tree
+    if (i % 2 == 0){
+      index = i + 1
+    } else {
+      index = i - 1
+    }
+    txHashes[index] = input.paths2tx_root[i][0]
+  }
+  for (var i = 0; i < txHashes.length; i++){
+    var processedTx = new ProcessedTx(
+      i,
+      txHashes[i],
+      txRoot,
+      newStateRoot,
+      transactions[i].fromX,
+      transactions[i].fromY,
+      transactions[i].toX,
+      transactions[i].toY,
+      transactions[i].amount,
+      transactions[i].tokenType
+    )
+    processedTx.save()
+  }
+  await db.deleteMaxTxs()
 }

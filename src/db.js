@@ -1,5 +1,6 @@
 import config from '../config/config.js';
 import Account from './account.js';
+import ProcessedTx from './processed_tx.js';
 import fs from 'fs'
 import utils from './utils.js'
 import logger from './logger.js'
@@ -21,13 +22,24 @@ async function getMaxTxs() {
   return res
 }
 
+async function deleteMaxTxs() {
+  await knex.delete('*').from('tx').limit(global.gConfig.txs_per_snark);
+}
+
 // genesis state of co-ordinator 
 async function AddGenesisState() {
   var genesis = await utils.readGenesis()
-  logger.info("writing accounts from genesis to DB", { AccountCount: genesis.accounts.length })
+  logger.info("writing accounts from genesis to DB", { 
+    AccountCount: genesis.accounts.length })
   genesis.accounts.forEach(account => {
     console.log(account.pubkeyX)
-    var newAccount = new Account(account.index, account.pubkeyX, account.pubkeyY, account.balance, account.nonce, account.tokenType)
+    var newAccount = new Account(
+      account.index, 
+      account.pubkeyX, 
+      account.pubkeyY, 
+      account.balance, 
+      account.nonce, 
+      account.tokenType)
     newAccount.save()
   });
 }
@@ -53,6 +65,7 @@ async function getAllAccounts() {
 export default {
   getTxCount,
   getMaxTxs,
+  deleteMaxTxs,
   getAllAccounts,
   AddGenesisState
 }
