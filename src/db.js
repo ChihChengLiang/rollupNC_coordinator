@@ -26,6 +26,19 @@ async function deleteMaxTxs() {
   await knex.delete('*').from('tx').limit(global.gConfig.txs_per_snark);
 }
 
+async function getTxsFromSameRoot(txHash) {
+  var txRoot = await knex.select('txRoot').from('processed_tx')
+  .where('txHash', txHash).txRoot
+  var res = await knex.select('txHash', 'index').from('processed_tx')
+  .where('txRoot', txRoot).orderBy('index', 'asc')
+  return res
+}
+
+async function getTxIndex(txHash){
+  var res = await knex.select('index').from('processed_tx').where('txHash', txHash)
+  return res
+}
+
 // genesis state of co-ordinator 
 async function AddGenesisState() {
   var genesis = await utils.readGenesis()
@@ -66,6 +79,8 @@ export default {
   getTxCount,
   getMaxTxs,
   deleteMaxTxs,
+  getTxsFromSameRoot,
+  getTxIndex,
   getAllAccounts,
   AddGenesisState
 }

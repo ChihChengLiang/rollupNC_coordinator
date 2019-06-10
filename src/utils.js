@@ -7,6 +7,7 @@ import merkle from "./snark_utils/MiMCMerkle.js"
 import balance from "./snark_utils/generate_balance_leaf.js"
 import tx from "./snark_utils/generate_tx_leaf.js"
 import update from "./snark_utils/update.js"
+import Account from "./account.js"
 import Transaction from './transaction.js';
 const {stringifyBigInts, unstringifyBigInts} = require('./snark_utils/stringifybigint.js')
 
@@ -86,8 +87,6 @@ async function prepTxs(txs) {
   var [fromX, fromY, toX, toY, tokenTypes, signatures, amounts] = await getTransactionArray(txs)
   const txArray = await tx.generateTxLeafArray(fromX, fromY, toX, toY, amounts, tokenTypes)
 
-  const tx_token_types = [10, 10, 10, 10];
-
   var accountsArray = await db.getAllAccounts()
   var from_accounts_idx = [1, 2, 1, 3]
   var to_accounts_idx = [2, 0, 3, 2]
@@ -101,11 +100,61 @@ async function prepTxs(txs) {
     from_accounts_idx,
     to_accounts_idx,
     amounts,
-    tx_token_types,
+    tokenTypes,
     signatures
   )
   return inputs
   // console.log("input generated", inputs)
+}
+
+function getTxHashesFromSnarkInput(input){
+  var txHashes = new Array()
+  for (var i = 0; i < input.paths2tx_root.length; i++){
+    var index; // index of tx in tx tree
+    if (i % 2 == 0){
+      index = i + 1
+    } else {
+      index = i - 1
+    }
+    txHashes[index] = input.paths2tx_root[i][0]
+  }
+  return txHashes
+}
+
+function getAccountsDeltaFromInput(input){
+  const uniqueAcctsX = [...new Set(input["from_x"].push(input["to_x"]))]
+  const uniqueAcctsY = [...new Set(input["from_y"].push(input["to_y"]))]
+  var deltaArray = new Array(uniqueAcctsX.length)
+  
+  // disregard zero account state
+  var zeroAccountIndex = uniqueAcctsX.indexOf(0); 
+  if (zeroAccountIndex > -1) {
+    uniqueAcctsX.splice(zeroAccountIndex, 1);
+    uniqueAcctsY.splice(zeroAccountIndex, 1);
+  }
+
+  for (var i = 0; i < uniqueAcctsX.length; i++){
+    delta = {
+      pubkey_x: uniqueAcctsX[i],
+      pubkey_y: uniqueAcctsY[i],
+      balance_delta: 0,
+      nonce_delta: 0
+    }
+    for (var j = 0; j < input["from_x"].length; j++){
+      if (input['from_x'][j] == delta.pubkey_x){
+        delta.balance_delta -= input['amount'][j]
+        if (input['to_x'][i] != '0'){
+          delta.nonce_delta += 1;
+        }
+      }
+      if (input['to_x'][j] == delta.pubkey_x){
+        delta.balance_delta += input['amount'][j]
+      }
+    }
+    deltaArray.push(delta)
+  }
+
+  return deltaArray
 }
 
 // async function prepTxs(txs) {
@@ -191,8 +240,17 @@ async function prepTxs(txs) {
 // convert from JSON transaction to transaction object
 function JSON2Tx(data) {
   var txData = JSON.parse(data)[0]
-  return new Transaction(txData.fromX, txData.fromY, txData.toX,
-    txData.toY, txData.amount, txData.tokenType, txData.R1, txData.R2, txData.S)
+  return new Transaction(
+    txData.fromX, txData.fromY, txData.toX, txData.toY, 
+    txData.amount, txData.tokenType, txData.R1, txData.R2, txData.S)
+}
+
+// convert from JSON deposit to deposit object
+function JSON2Deposit(data) {
+  var depositData = JSON.parse(data)[0]
+  return new Deposit(
+    depositData.pubkey_x, depositData.pubkey_y, 
+    depositData.amount, depositData.token_type)
 }
 
 // read genesis file 
@@ -208,6 +266,8 @@ export default {
   toMultiHash,
   checkSignature,
   prepTxs,
+  getTxHashesFromSnarkInput,
+  getAccountsDeltaFromInput,
   JSON2Tx,
   readGenesis,
   toSignature

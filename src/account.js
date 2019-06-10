@@ -4,10 +4,10 @@ import knex from '../DB/dbClient.js';
 
 // class transaction
 export default class Account {
-  constructor(_index, _PubkeyX, _PubkeyY, _balance, _nonce, _tokenType) {
+  constructor(_index, _pubkeyX, _pubkeyY, _balance, _nonce, _tokenType) {
     this.index = _index;
-    this.pubkeyX = _PubkeyX;
-    this.pubkeyY = _PubkeyY;
+    this.pubkeyX = _pubkeyX;
+    this.pubkeyY = _pubkeyY;
     this.balance = _balance;
     this.nonce = _nonce;
     this.tokenType = _tokenType;

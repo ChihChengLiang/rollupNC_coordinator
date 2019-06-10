@@ -10,8 +10,11 @@ import logger from './logger';
 import Transaction from './transaction.js';
 import mysql from 'mysql';
 import Mempool from './mempool.js';
+import DepositMempool from './depositMempool.js'
 import DB from './db'
+import { DepositProcessor } from './depositProcessor.js';
 const bigInt = require("snarkjs").bigInt;
+const mimcMerkle = require('./snark_utils/MiMCMerkle.js')
 
 process.env.NODE_ENV = "development";
 // create express obj 
@@ -28,7 +31,10 @@ const poller = new Poller(global.gConfig.poll_interval);
 
 // create processor obj 
 const processor = new Processor()
+const depositProcessor = new DepositProcessor()
 const mempool = new Mempool()
+const depositMempool = new DepositMempool()
+
 // tokens for which operator is accepting transactions
 // to be dynamically fetched from contract
 const allowedTokens = [0, 10, 20]
@@ -70,6 +76,15 @@ app.post("/sign", async function (req, res) {
   })
 })
 
+app.get("/getMerkleProof", async function (req, res){
+  var txHash = await utils.toMultiHash(req.body.fromX, req.body.fromY, req.body.toX, req.body.toY, req.body.amount, req.body.tokenType).toString()
+  var [merkleProof, position] = getMerkleProof(txHash)
+  res.json({ 
+    merkleProof: merkleProof,
+    position: position 
+  })
+})
+
 // add transaction to queue
 async function addtoqueue(conn, tx) {
   var ch = await conn.createChannel();
@@ -77,15 +92,36 @@ async function addtoqueue(conn, tx) {
   // logger.debug("Adding new message to queue", { queueDetails: result, tx: tx.toString() });
   await ch.sendToQueue(q, Buffer.from(tx.toString()), { persistent: true });
   return;
+} 
+
+async function getMerkleProof(txHash){
+  const txsFromSameRoot = DB.getTxsFromSameRoot(txHash)
+  var txArray 
+  for (var i = 0; i < txsFromSameRoot.length; i++){
+    txArray.push(txsFromSameRoot[i].txHash)
+  }
+  const tree = mimcMerkle.treeFromLeafArray(txArray)
+  const txIndex = DB.getTxIndex(txHash)
+  const position = mimcMerkle.idxToBinaryPos(txIndex, Math.log2(txArray.length))
+  const proof = mimcMerkle.getProof(txIndex, tree, txArray)
+  return [proof, position]
 }
 
-// start api server 
+// start api server
 app.listen(global.gConfig.port, () => {
   DB.AddGenesisState()
   processor.start(poller)
   mempool.StartSync()
   logger.info(
     "Started listening for transactions", { port: global.gConfig.port })
+});
+
+// start web3 server
+app.listen(global.gConfig.web3_port, () => {
+  depositProcessor.start(poller)
+  depositMempool.StartSync()
+  logger.info(
+    "Started listening for deposits", { port: global.gConfig.web3_port })
 });
 
 // handle interruption

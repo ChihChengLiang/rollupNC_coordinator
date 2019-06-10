@@ -3,6 +3,7 @@ import logger from './logger';
 import createProof from './circuit';
 import db from './db';
 import ProcessedTx from './processed_tx.js'
+import Update from './update.js'
 
 const q = global.gConfig.tx_queue;
 const maxTxs = global.gConfig.txs_per_snark;
@@ -56,16 +57,19 @@ async function fetchTxs() {
   const txRoot = input['tx_root']
   console.log('txRoot', txRoot)
   const newStateRoot = input.intermediate_roots[input.intermediate_roots.length - 1]
-  var txHashes = new Array()
-  for (var i = 0; i < input.paths2tx_root.length; i++){
-    var index; // index of tx in tx tree
-    if (i % 2 == 0){
-      index = i + 1
-    } else {
-      index = i - 1
-    }
-    txHashes[index] = input.paths2tx_root[i][0]
+  const txHashes = utils.getTxHashesFromSnarkInput(input)
+  const accountsDelta = utils.getAccountsDeltaFromInput(input)
+
+  for (var i = 0; i < accountsDelta.length; i++){
+    var update = new Update(
+      accountsDelta[i].pubkey_x,
+      accountsDelta[i].pubkey_y,
+      accountsDelta[i].balance_delta,
+      accountsDelta[i].nonce_delta
+    )
+    update.save()
   }
+
   for (var i = 0; i < txHashes.length; i++){
     var processedTx = new ProcessedTx(
       i,
@@ -82,4 +86,5 @@ async function fetchTxs() {
     processedTx.save()
   }
   await db.deleteMaxTxs()
+  
 }
